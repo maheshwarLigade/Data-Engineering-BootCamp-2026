@@ -1,0 +1,25 @@
+# --- UV / Python Specifics ---
+.venv/                  # Virtual environment created by uv
+uv.lock                 # Standard practice: commit for apps, ignore for libraries
+.python-version         # Local python version set by uv
+
+# --- Python Build & Cache ---
+__pycache__/            # Compiled bytecode
+*.py[cod]               # Compiled python files
+*$py.class              # Compiled python files
+.pytest_cache/          # Pytest execution cache
+.mypy_cache/            # MyPy static analysis cache
+.ruff_cache/            # Ruff linting cache
+
+# --- Data & Parquet Files ---
+# Ignore all Parquet files to prevent large binary blobs in Git
+*.parquet
+*.pq
+
+# Optional: Ignore specific data directories
+data/
+!data/.gitkeep          # If you want to keep the directory but not its contents
+
+# --- Environment Variables ---
+.env
+.env.local
