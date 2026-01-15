@@ -1,3 +1,46 @@
+# some practice commands 
+# check docker version
+docker --version
+docker compose version
+
+#pull image
+docker pull postgres:15
+
+# list of images
+docker images
+
+#run container
+docker run -it postgres:15
+
+#list running container 
+docker ps
+
+# run container with port
+docker run -it --rm -p 5432:5432 postgres:15
+
+# run container with env
+docker run -it --rm \
+  -e POSTGRES_USER="root" \
+  -e POSTGRES_PASSWORD="root" \
+  postgres:15
+
+# run container with volume
+docker run -it --rm \
+  -e POSTGRES_USER="root" \
+  -e POSTGRES_PASSWORD="root" \
+  -v ny_taxi_postgres_data:/var/lib/postgresql/data \
+  postgres:15
+
+# create network
+docker network create pg-network
+# stop container
+docker stop my_postgres
+
+# remove container
+docker rm my_postgres
+
+#list of voulmns
+
 docker run -it --rm \
   -e POSTGRES_USER="root" \
   -e POSTGRES_PASSWORD="root" \
