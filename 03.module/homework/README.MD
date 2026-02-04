@@ -166,7 +166,7 @@ FROM zoomcamp.yellow_tripdata_parquet
 
 > How many bytes does it estimate will be read? Why?
 
-The estimate number of bytes is 0 B and the reason is that with materialized tables, BigQuery already maintains the count of records as part of the table metadata. If we added a filter, we'd obtain an amout of bytes different than zero.
+The estimated number of bytes is 0 B, and the reason is that with materialized tables, BigQuery already maintains the count of records as part of the table metadata. If we added a filter, we'd obtain an amount of bytes different than zero.
 
 For instance, the estimate of processed bytes for this other query is 155.12 MB.
 
