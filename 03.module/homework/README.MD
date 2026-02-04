@@ -1,178 +1,181 @@
-### Question 1:
+# Module 3 Homework: Data Warehousing & BigQuery
 
-**What is count for fhv vehicles data for year 2019**  
-Can load the data for cloud storage and run a count(\*)
+## Data
 
-> Code:
+For this homework we will be using the Yellow Taxi Trip Records for **January 2024 - June 2024** (not the entire year of data).
+
+Parquet Files are available from the New York City Taxi Data found [here](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page).
+
+## Loading the data
+
+You can use the following scripts to load the data into your GCS bucket:
+
+- Python script: [load_yellow_taxi_data.py](./load_yellow_taxi_data.py)
+- Jupyter notebook with DLT: [DLT_upload_to_GCP.ipynb](./DLT_upload_to_GCP.ipynb)
+
+If you want to use the script, first download your credentials JSON file as `service-account.json` and then run:
+
+```bash
+uv run load_yellow_taxi_data.py
+```
+
+You will need to generate a Service Account with GCS Admin privileges or be authenticated with the Google SDK, and update the bucket name in the script.
+
+If you are using orchestration tools such as Kestra, Mage, Airflow, or Prefect, do not load the data into BigQuery using the orchestrator.
+
+Make sure that all 6 files show in your GCS bucket before beginning.
+
+> [!NOTE]
+> You will need to use the PARQUET option when creating an external table.
+
+## BigQuery Setup
+
+> Create an external table using the Yellow Taxi Trip Records.
 
 ```sql
-SELECT count(*)
-FROM `animated-surfer-338618.trips_data_all.fhv_tripdata`
-WHERE DATE(pickup_datetime) BETWEEN "2019-01-01" AND "2019-12-31";
-```
-
-> Answer (correct):
-
-```
-42084899
-```
-
-> Proposed solution code:
-
-```sql
--- Create a table with only the 2019 data for simplicity
-CREATE OR REPLACE EXTERNAL TABLE `animated-surfer-338618.trips_data_all.fhv_tripdata`
+CREATE OR REPLACE EXTERNAL TABLE `zoomcamp.yellow_tripdata_parquet_ext`
 OPTIONS (
-  format = 'CSV',
-  uris = ['gs://dtc_data_lake_animated-surfer-338618/fhv/fhv_tripdata_2019-*.csv']
+  format = 'Parquet',
+  uris = ['gs://newyork-taxi/yellow_tripdata_*.parquet']
 );
-
--- Count of fhv trips
-SELECT count(*) FROM `animated-surfer-338618.trips_data_all.fhv_tripdata`;
 ```
 
-### Question 2:
-
-**How many distinct dispatching_base_num we have in fhv for 2019**  
-Can run a distinct query on the table from question 1
-
-> Code:
+> Create a regular, materialized table in BigQuery using the Yellow Taxi Trip Records. Do not partition or cluster this table.
 
 ```sql
-SELECT count(DISTINCT(dispatching_base_num))
-FROM `animated-surfer-338618.trips_data_all.fhv_tripdata`
-WHERE DATE(pickup_datetime) BETWEEN "2019-01-01" AND "2019-12-31";
+CREATE OR REPLACE TABLE zoomcamp.yellow_tripdata_parquet
+AS
+SELECT * FROM zoomcamp.yellow_tripdata_parquet_ext;
 ```
 
-> Answer (correct):
+## Question 1. Counting records
 
-```
-792
-```
-
-> Proposed solution code:
+> What is count of records for the 2024 Yellow Taxi Data?
 
 ```sql
-SELECT COUNT(DISTINCT(dispatching_base_num)) FROM `animated-surfer-338618.trips_data_all.fhv_tripdata`;
+SELECT COUNT(*) FROM zoomcamp.yellow_tripdata_parquet
 ```
 
-### Question 3:
+- **20,332,093**
 
-**Best strategy to optimise if query always filter by dropoff_datetime and order by dispatching_base_num**  
-Review partitioning and clustering video.  
-We need to think what will be the most optimal strategy to improve query
-performance and reduce cost.
+## Question 2. Data read estimation
 
-> Answer (correct):
-
-```
-Partition by dropoff_datetime and cluster by dispatching_base_num
-```
-
-### Question 4:
-
-**What is the count, estimated and actual data processed for query which counts trip between 2019/01/01 and 2019/03/31 for dispatching_base_num B00987, B02060, B02279**  
-Create a table with optimized clustering and partitioning, and run a
-count(\*). Estimated data processed can be found in top right corner and
-actual data processed can be found after the query is executed.
-
-> Code:
+> Write a query to count the distinct number of PULocationIDs for the entire dataset on both the tables.
 
 ```sql
-CREATE OR REPLACE TABLE `animated-surfer-338618.trips_data_all.fhv_tripdata_clustered`
-PARTITION BY DATE(pickup_datetime)
-CLUSTER BY dispatching_base_num AS
-SELECT * FROM `animated-surfer-338618.trips_data_all.fhv_tripdata`;
+/* External table */
+SELECT DISTINCT PULocationID FROM zoomcamp.yellow_tripdata_parquet_ext
 
-SELECT count(*)
-FROM `animated-surfer-338618.trips_data_all.fhv_tripdata_clustered`
-WHERE DATE(pickup_datetime) BETWEEN "2019-01-01" AND "2019-03-31"
-AND dispatching_base_num IN ('B00987','B02060','B02279');
+/* Materialized table */
+SELECT DISTINCT PULocationID FROM zoomcamp.yellow_tripdata_parquet
 ```
 
-> Answer (correct):
+> What is the **estimated amount** of data that will be read when this query is executed on the External Table and the Table?
 
-```
-Estimated data: 400.1MB
-Processed data: 145.4MB
-Count: 26647
+- **0 MB for the External Table and 155.12 MB for the Materialized Table**
 
-Note: Processed data is only 145 (155 in the form) if we use a clustered table. On a non-clustered table it would process the full 400MB.
+## Question 3. Understanding columnar storage
 
-Note 2: using the proposed solution code, the processed data is 149MB and the count is 26658.
-```
-
-> Proposed solution code:
+> Write a query to retrieve the PULocationID from the table (not the external table) in BigQuery. Now write a query to retrieve the PULocationID and DOLocationID on the same table.
 
 ```sql
--- This code assumes that fhv_tripdata only contains 2019 data
--- Non-partitioned table
-CREATE OR REPLACE TABLE `animated-surfer-338618.trips_data_all.fhv_nonpartitioned_tripdata`
-AS SELECT * FROM `animated-surfer-338618.trips_data_all.fhv_tripdata`;
+/* 155.12 MB */
+SELECT PULocationID FROM zoomcamp.yellow_tripdata_parquet
 
--- Partitioned and clustered table
-CREATE OR REPLACE TABLE `animated-surfer-338618.trips_data_all.fhv_partitioned_tripdata`
-PARTITION BY DATE(dropoff_datetime)
-CLUSTER BY dispatching_base_num AS (
-  SELECT * FROM `animated-surfer-338618.trips_data_all.fhv_tripdata`
-);
-
-SELECT count(*) FROM  `animated-surfer-338618.trips_data_all.fhv_nonpartitioned_tripdata`
-WHERE dropoff_datetime BETWEEN '2019-01-01' AND '2019-03-31'
-  AND dispatching_base_num IN ('B00987', 'B02279', 'B02060');
+/* 310.24 MB */
+SELECT PULocationID, DOLocationID FROM zoomcamp.yellow_tripdata_parquet
 ```
 
-### Question 5:
+> Why are the estimated number of Bytes different?
 
-**What will be the best partitioning or clustering strategy when filtering on dispatching_base_num and SR_Flag**  
-Review partitioning and clustering video.
-Clustering cannot be created on all data types.
+- **BigQuery is a columnar database, and it only scans the specific columns requested in the query. Querying two columns (PULocationID, DOLocationID) requires reading more data than querying one column (PULocationID), leading to a higher estimated number of bytes processed.**
 
-> Code:
+## Question 4. Counting zero fare trips
+
+> How many records have a fare_amount of 0?
 
 ```sql
-SELECT count(DISTINCT(SR_Flag))
-FROM `animated-surfer-338618.trips_data_all.fhv_tripdata`
-WHERE DATE(pickup_datetime) BETWEEN "2019-01-01" AND "2019-03-31";
+SELECT COUNT(*) FROM zoomcamp.yellow_tripdata_parquet WHERE fare_amount = 0
 ```
 
-> Answer (dispute):
+- **8,333**
 
-```
-Partition by SR_Flag and cluster by dispatching_base_num
+## Question 5. Partitioning and clustering
 
-Partitions can only be done on timestamps, dates or integers and there's a limit of 4000 partitions. SR_Flag is an integer and using the code above we can see that there are 43 distinct SR_Flag values, so we can use it for partitioning. Clustering can be done on Strings and dispatching_base_num is a string, so we cluster by it.
-```
+> What is the best strategy to make an optimized table in Big Query if your query will always filter based on tpep_dropoff_datetime and order the results by VendorID?
 
-> Proposed solution:
+- **Partition by tpep_dropoff_datetime and Cluster on VendorID**
 
-```
-Cluster by SR_Flag and dispatching_base_num
+> Create a new table with this strategy.
 
-In the proposed code, the SR_Flag field appears as a String rather than an Integer which means that we could not use it for partitioning. However, if SR_Flag is an integer as it is in my case, then my solution is correct.
-```
-
-### Question 6:
-
-**What improvements can be seen by partitioning and clustering for data size less than 1 GB**  
-Partitioning and clustering also creates extra metadata.  
-Before query execution this metadata needs to be processed.
-
-> Answer (correct):
-
-```
-(Multiple choice)
-No improvements
-Can be worse due to metadata
+```sql
+CREATE OR REPLACE TABLE zoomcamp.yellow_tripdata_parquet_partitioned_clustered
+PARTITION BY DATE(tpep_dropoff_datetime)
+CLUSTER BY VendorID AS
+SELECT * FROM zoomcamp.yellow_tripdata_parquet;
 ```
 
-### (Not required) Question 7:
+## Question 6. Partition benefits
 
-**In which format does BigQuery save data**  
-Review big query internals video.
+> Write a query to retrieve the distinct VendorIDs between tpep_dropoff_datetime 2024-03-01 and 2024-03-15 (inclusive).
 
-> Answer (correct):
+```sql
+/* Materialized table */
+SELECT DISTINCT VendorID
+FROM zoomcamp.yellow_tripdata_parquet
+WHERE tpep_dropoff_datetime BETWEEN '2024-03-01' AND '2024-03-15'
 
+/* Partitioned and clustered table */
+SELECT DISTINCT VendorID
+FROM zoomcamp.yellow_tripdata_parquet_partitioned_clustered
+WHERE tpep_dropoff_datetime BETWEEN '2024-03-01' AND '2024-03-15'
 ```
-Columnar
+
+> Use the materialized table you created earlier in your from clause and note the estimated bytes.
+
+- **310.24 MB**
+
+> Now change the table in the from clause to the partitioned table you created for question 5 and note the estimated bytes processed.
+
+- **26.84 MB**
+
+> What are these values? Choose the answer which most closely matches.
+
+- **310.24 MB for non-partitioned table and 26.84 MB for the partitioned table**
+
+## Question 7. External table storage
+
+> Where is the data stored in the External Table you created?
+
+- **GCP Bucket**
+
+## Question 8. Clustering best practices
+
+> It is best practice in Big Query to always cluster your data:
+
+- **True**, but with good criteria.
+
+## Question 9. Understanding table scans
+
+> No Points: Write a `SELECT count(*)` query FROM the materialized table you created.
+
+```sql
+SELECT COUNT(*)
+FROM zoomcamp.yellow_tripdata_parquet
 ```
+
+> How many bytes does it estimate will be read? Why?
+
+The estimate number of bytes is 0 B and the reason is that with materialized tables, BigQuery already maintains the count of records as part of the table metadata. If we added a filter, we'd obtain an amout of bytes different than zero.
+
+For instance, the estimate of processed bytes for this other query is 155.12 MB.
+
+```sql
+SELECT COUNT(*)
+FROM zoomcamp.yellow_tripdata_parquet
+WHERE VendorID = 2
+```
+
+## Submitting the solutions
+
+Form for submitting: https://courses.datatalks.club/de-zoomcamp-2026/homework/hw3
