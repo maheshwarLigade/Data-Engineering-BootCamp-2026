@@ -1,0 +1,44 @@
+services:
+  spark-master:
+    image: apache/spark:3.5.8-scala2.12-java17-python3-ubuntu
+    container_name: spark-master
+    hostname: spark-master
+    user: root
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    ports:
+      - "${SPARK_MASTER_UI_PORT:-8080}:8080"
+      - "${SPARK_MASTER_PORT:-7077}:7077"
+    command: /opt/spark/sbin/start-master.sh
+    volumes:
+      - ./notebooks:/workspace
+
+  spark-worker:
+    image: apache/spark:3.5.8-scala2.12-java17-python3-ubuntu
+    container_name: spark-worker
+    user: root
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    command: /opt/spark/sbin/start-worker.sh spark://spark-master:7077
+    volumes:
+      - ./notebooks:/workspace
+
+  jupyter:
+    build: .
+    container_name: spark-jupyter
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+    command: >
+      jupyter notebook
+      --ip=0.0.0.0
+      --allow-root
+      --no-browser
+      --NotebookApp.token=''
+    volumes:
+      - ./notebooks:/workspace
